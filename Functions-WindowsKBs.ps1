@@ -1,4 +1,4 @@
-<# SystemInsecure
+<# SystemInsecure 2023-08-01
 Original script from https://smsagent.blog/2021/04/20/get-the-current-patch-level-for-windows-10-with-powershell/
 Heavily modified for my use cases.
 #>
