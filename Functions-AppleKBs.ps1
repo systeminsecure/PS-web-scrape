@@ -43,8 +43,8 @@ Function CreateRecordSet {
     param(
              [Parameter(Mandatory)]
              $RawDataSet,
-             [Parameter(Mandatory)]
-             $Days = 95
+             [Parameter(Mandatory=$False)]
+             $Days
              )
 
 $output = @()
@@ -72,21 +72,29 @@ Foreach ($record in $RawDataSet){
     }
 }
 
-Return $output | Sort Release_date -Descending | ? {$_.Age -le $Days}
+If ($Days -ne $null) {
+    Return $output | Sort Release_date -Descending | ? {$_.Age -le $Days}
+} else {
+    Return $output | Sort Release_date -Descending
+}
+
 
 }
+
 
 
 # --==Example==--
 Write-host("`nPulling patch levels from the Apple website...`n") -ForegroundColor Cyan
 $Content = GetApplePageResponse -URI "https://support.apple.com/en-us/HT201222"
 $Table = CleanPageResponse -Content $Content
-$AlliOS = $Table | ? {$_ -like "* and iPadOS*"}
-$AllMacOS = $Table | ? {$_ -like "*macOS*" -and $_ -notlike "*Safari*" -and $_ -notlike "*Xcode*" -and $_ -notlike "*Firmware*"  -and $_ -notlike "*Garage*"}
+$AlliOS = $Table | ? {$_ -like "* and iPadOS*" -and $_ -notlike "*Rapid*"}
+$AllMacOS = $Table | ? {$_ -like "*macOS*" -and $_ -notlike "*Safari*" -and $_ -notlike "*Xcode*" -and $_ -notlike "*Firmware*"  -and $_ -notlike "*Garage*" -and $_ -notlike "*Rapid*"}
 
-$iOSverCurrent = (CreateRecordSet -RawDataSet $AlliOS -Days 30).Version
-$iOSVerNminus2 = (CreateRecordSet -RawDataSet $AlliOS -Days 95| ? {$_.Age -gt 60}).Version
-$MacOSverCurrent = (CreateRecordSet -RawDataSet $AllMacOS -Days 30).Version
-$MacOSVerNminus2 = (CreateRecordSet -RawDataSet $AllMacOS -Days 95 | ? {$_.Age -gt 60}).Version
+$iOSAllVersions = CreateRecordSet -RawDataSet $AlliOS | sort Version -Descending
+$iOSverCurrent = (CreateRecordSet -RawDataSet $AlliOS -Days 30).Version | Select-Object -unique
+$iOSVerNminus2 = (CreateRecordSet -RawDataSet $AlliOS -Days 95| ? {$_.Age -gt 30}).Version | Select-Object -unique #Note day 30 to 95 included.
+$MacOSAllVersions = CreateRecordSet -RawDataSet $AllMacOS | sort Version -Descending
+$MacOSverCurrent = (CreateRecordSet -RawDataSet $AllMacOS -Days 30).Version | Select-Object -unique
+$MacOSVerNminus2 = (CreateRecordSet -RawDataSet $AllMacOS -Days 95 | ? {$_.Age -gt 30}).Version | Select-Object -unique #Note day 30 to 95 included.
 
 # You should be able to use the resulting returned arrays for comparison against another recordset to filter which need updates.
