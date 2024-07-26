@@ -47,36 +47,45 @@ Function CreateRecordSet {
              $Days
              )
 
-$output = @()
-Foreach ($record in $RawDataSet){
-    $record = $record.Substring(4,$record.length - 4)
-    $record = ($record -split ("<td>")) #split into 3 element array
-    $version = ($($record[1]) -split('(\d+(\.\d+){1,3})'))[1] #Version number
-    $releasedate = ($record[-1] -split('(\d+[\s]\w+[\s]\d+)'))[1]
-    $recordtext = (($record[1] -split('>'))[1] -split('<'))[0]
+    $output = @()
+    $i=0
+    Foreach ($record in $RawDataSet){
 
-    #$($record[1])
-    #$releasedate
-
-    if (! ((([version]$version).Minor -le 0) -and (([version]$version).build -eq -1) -and (([version]$version).revision -eq -1)) ) {
-        if ($version -ne $null){
-            #Write-host ("$($version) / $($releasedate) / $($recordtext) ")
-            $result = [PSCustomObject] @{
-                "Version"=$($version)
-                "Release_Date"=$(([datetime]$releasedate).ToString("yyyy-MM-dd"))
-                "Age" = ((Get-Date)-([datetime]$releasedate)).days
-                "Text"=$recordtext
-                }
-            $output = $output + $result
+        $record = $record -replace("<br>","")
+        $record = $record -replace("`n","")
+        $record = $record -replace("<tr>","")
+        if ($record -like "*<a href*"){
+            $record = "<td>"+$(($record -split('">'))[1])
         }
-    }
-}
+        $record = ($record -split ("<td>")) #split into 4 element array
+        $version = ($($record[1]) -split('(\d{1,2}(\.{0,1}\d+){1,3})'))[1] #Version number
+        $releasedate = ($record[-1] -split('(\d+[\s]\w+[\s]\d+)'))[1]
+        $recordtext = (($record[2]) -split('<'))[0]
 
-If ($Days -ne $null) {
-    Return $output | Sort Release_date -Descending | ? {$_.Age -le $Days}
-} else {
-    Return $output | Sort Release_date -Descending
-}
+        if ($version -notlike "*.*"){
+            $version = $version + ".0"
+        }
+
+        #if (! ((([version]$version).Minor -le 0) -and (([version]$version).build -eq -1) -and (([version]$version).revision -eq -1)) ) {
+            if ($version -ne $null -and $releasedate -ne $null){
+                #Write-host ("$($version) / $($releasedate) / $($recordtext) [$($i)]")
+                $result = [PSCustomObject] @{
+                    "Version"=$($version)
+                    "Release_Date"=$(([datetime]$releasedate).ToString("yyyy-MM-dd"))
+                    "Age" = ((Get-Date)-([datetime]$releasedate)).days
+                    "Text"=$recordtext
+                    }
+                $output = $output + $result
+            }
+        #}
+        $i++
+    }
+
+    If ($Days -ne $null) {
+        Return $output | Sort Release_date -Descending | ? {$_.Age -le $Days}
+    } else {
+        Return $output | Sort Release_date -Descending
+    }
 
 
 }
