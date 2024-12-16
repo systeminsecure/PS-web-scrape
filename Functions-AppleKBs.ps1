@@ -1,4 +1,4 @@
-<# SystemInsecure 2024-10-01
+<# SystemInsecure v0.2 2024-10-01
 
 Scrapes the Apple KB web article containing the versions and dates released, and puts the information into an array for use elsewhere 
 (eg comparing to the version retrieved from EDR or MDM)
