@@ -1,5 +1,8 @@
-<# SystemInsecure 2023-08-01
-These functions were built by me from scratch
+<# SystemInsecure 2024-10-01
+
+Scrapes the Apple KB web article containing the versions and dates released, and puts the information into an array for use elsewhere 
+(eg comparing to the version retrieved from EDR or MDM)
+
 #>
 
 Function GetApplePageResponse {
@@ -7,6 +10,10 @@ Function GetApplePageResponse {
              [Parameter(Mandatory)]
              $URI
          )
+
+    #hide progress dialogs
+    $tProgressPreference = $ProgressPreference
+    $ProgressPreference = 'SilentlyContinue'
 
     If ($PSVersionTable.PSVersion.Major -ge 6)
             {
@@ -16,6 +23,9 @@ Function GetApplePageResponse {
             {
                 $Response = Invoke-WebRequest –Uri $URI –UseBasicParsing –ErrorAction Stop
             }
+
+    $ProgressPreference = $tProgressPreference # unhide further dialogs
+
     Return $Response.Content
 
 }
@@ -26,14 +36,14 @@ Function CleanPageResponse {
              $Content
              )
 
-#Peel away erroneus table info
-$Table = $((($Content -Split("<tbody>")))[1]) #strip text above table
-$Table = ($Table -split("</tbody>"))[0] #strip text below table
-$Table = ($Table -Split("</th>"))[3] #strip table headers
-$Table = ($Table.Substring(6,$Table.length - 6)) #strip first </tr>
-$Table = ($Table -Split("</tr>")) #break result into array for further use
+    #Peel away erroneus table info
+    $Table = $((($Content -Split("<tbody>")))[1]) #strip text above table
+    $Table = ($Table -split("</tbody>"))[0] #strip text below table
+    $Table = ($Table -Split("</th>"))[3] #strip table headers
+    $Table = ($Table.Substring(5,$Table.length - 5)) #strip first </tr>
+    $Table = ($Table -Split("</tr>")) #break result into array for further use
 
-Return $Table
+    Return $Table
 
 
 }
@@ -55,12 +65,13 @@ Function CreateRecordSet {
         $record = $record -replace("`n","")
         $record = $record -replace("<tr>","")
         if ($record -like "*<a href*"){
-            $record = "<td>"+$(($record -split('">'))[1])
+            $recordversion = "<td>"+$(($record -split('">'))[3])
+            $recordreleasedate = "<td>"+$(($record -split('">'))[7])
         }
         $record = ($record -split ("<td>")) #split into 4 element array
-        $version = ($($record[1]) -split('(\d{1,2}(\.{0,1}\d+){1,3})'))[1] #Version number
-        $releasedate = ($record[-1] -split('(\d+[\s]\w+[\s]\d+)'))[1]
-        $recordtext = (($record[2]) -split('<'))[0]
+        $version = ($($recordversion) -split('(\d{1,2}(\.{0,1}\d+){1,3})'))[1] #Version number
+        $releasedate = ($recordreleasedate -split('(\d+[\s]\w+[\s]\d+)'))[1]
+        $recordtext = ((($recordversion) -split('<'))[1] -split('>'))[-1]
 
         if ($version -notlike "*.*"){
             $version = $version + ".0"
@@ -107,3 +118,13 @@ $MacOSverCurrent = (CreateRecordSet -RawDataSet $AllMacOS -Days 30).Version | Se
 $MacOSVerNminus2 = (CreateRecordSet -RawDataSet $AllMacOS -Days 95 | ? {$_.Age -gt 30}).Version | Select-Object -unique #Note day 30 to 95 included.
 
 # You should be able to use the resulting returned arrays for comparison against another recordset to filter which need updates.
+
+<#
+
+
+
+Chagelog:
+- 0.1 initial version 2023-08-01
+- 0.2 Fix for parsing changes in Apples KB page 2024-10-01 JD
+
+#>
