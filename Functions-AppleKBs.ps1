@@ -1,4 +1,4 @@
-<# SystemInsecure v0.2 2024-10-01
+<# SystemInsecure v0.3 2024-10-01
 
 Scrapes the Apple KB web article containing the versions and dates released, and puts the information into an array for use elsewhere 
 (eg comparing to the version retrieved from EDR or MDM)
@@ -67,6 +67,9 @@ Function CreateRecordSet {
         if ($record -like "*<a href*"){
             $recordversion = "<td>"+$(($record -split('">'))[3])
             $recordreleasedate = "<td>"+$(($record -split('">'))[7])
+        } else {
+            $recordversion = "<td>"+$(($record -split('">'))[2])
+            $recordreleasedate = "<td>"+$(($record -split('">'))[8])
         }
         $record = ($record -split ("<td>")) #split into 4 element array
         $version = ($($recordversion) -split('(\d{1,2}(\.{0,1}\d+){1,3})'))[1] #Version number
@@ -99,23 +102,41 @@ Function CreateRecordSet {
     }
 
 
-}
+} #v0.3 capture releases with no URL
+
 
 
 
 # --==Example==--
 Write-host("`nPulling patch levels from the Apple website...`n") -ForegroundColor Cyan
-$Content = GetApplePageResponse -URI "https://support.apple.com/en-us/HT201222"
-$Table = CleanPageResponse -Content $Content
-$AlliOS = $Table | ? {$_ -like "* and iPadOS*" -and $_ -notlike "*Rapid*"}
-$AllMacOS = $Table | ? {$_ -like "*macOS*" -and $_ -notlike "*Safari*" -and $_ -notlike "*Xcode*" -and $_ -notlike "*Firmware*"  -and $_ -notlike "*Garage*" -and $_ -notlike "*Rapid*"}
+[array]$AppleUrls = ("https://support.apple.com/en-us/HT201222","https://support.apple.com/en-us/121012","https://support.apple.com/en-us/120989") #2024-Present, 2022-2023, 2020-2021
 
-$iOSAllVersions = CreateRecordSet -RawDataSet $AlliOS | sort Version -Descending
-$iOSverCurrent = (CreateRecordSet -RawDataSet $AlliOS -Days 30).Version | Select-Object -unique
-$iOSVerNminus2 = (CreateRecordSet -RawDataSet $AlliOS -Days 95| ? {$_.Age -gt 30}).Version | Select-Object -unique #Note day 30 to 95 included.
-$MacOSAllVersions = CreateRecordSet -RawDataSet $AllMacOS | sort Version -Descending
-$MacOSverCurrent = (CreateRecordSet -RawDataSet $AllMacOS -Days 30).Version | Select-Object -unique
-$MacOSVerNminus2 = (CreateRecordSet -RawDataSet $AllMacOS -Days 95 | ? {$_.Age -gt 30}).Version | Select-Object -unique #Note day 30 to 95 included.
+write-output ("[Apple Patches]: Pulling patch levels from the Apple website...")
+[array]$MacOSAllVersions = $null
+foreach($url in $AppleUrls){
+    $Content = GetApplePageResponse -URI $url
+    $Table = CleanPageResponse -Content $Content
+    $AllMacOS = $Table | ? {$_ -like "*macOS*" -and $_ -notlike "*Safari*" -and $_ -notlike "*Xcode*" -and $_ -notlike "*Firmware*"  -and $_ -notlike "*Garage*" -and $_ -notlike "*Rapid*" -and $_ -notlike "*Video*" -and $_ -notlike "*Security Update*" -and $_ -notlike "*Server*" -and $_ -notlike "*Windows*" -and $_ -notlike "*iMovie*"}
+    $MacOSAllVersions = $MacOSAllVersions + (CreateRecordSet -RawDataSet $AllMacOS | Sort-Object Age)
+}
+$MacOSVersions = foreach ($version in $MacOSAllVersions.Version){
+    [version]$version
+}
+
+$MacOSverCurrent = foreach ($version in ($MacOSVersions.major | Group-Object).Name){
+    $MacOSAllVersions | ?{$_.Version -like "*$($version)*" -and $_.Age -lt 120} | Select-Object -First 1
+}
+$MacOSverCurrent = $MacOSverCurrent.Version | Select-Object -unique
+
+$MacOSVerNminus1 = foreach ($version in ($MacOSVersions.major | Group-Object).Name){ 
+    $MacOSAllVersions | ?{$_.Version -like "*$($version)*"} | Select-Object -first 2 | Sort-Object Release_date | Select-Object -first 1 | ?{$_.Age -lt 120} 
+}
+$MacOSVerNminus1 = $MacOSVerNminus1.version | Select-Object -unique
+
+# Apple Version breakdown
+write-output ("[Apple Patches]: Current MacOS versions: $($MacOSverCurrent -join ", ")")
+write-output ("[Apple Patches]: N-1 MacOS versions: $($MacOSVerNminus1 -join ", ")")
+
 
 # You should be able to use the resulting returned arrays for comparison against another recordset to filter which need updates.
 
@@ -125,6 +146,6 @@ $MacOSVerNminus2 = (CreateRecordSet -RawDataSet $AllMacOS -Days 95 | ? {$_.Age -
 
 Chagelog:
 - 0.1 initial version 2023-08-01
-- 0.2 Fix for parsing changes in Apples KB page 2024-10-01 JD
-
+- 0.2 Fix for parsing changes in Apples KB page 2024-10-01
+- 0.3 Fix to capture releases with no URL 2025-04-07
 #>
